@@ -24,8 +24,36 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var rest = require('restler');
 var HTMLFILE_DEFAULT = "index.html";
+var URL_DEFAULT = "http://www.google.com/";
 var CHECKSFILE_DEFAULT = "checks.json";
+var TEMPURLFILE = ".tempURLoutput";
+
+
+var assertURLExists = function(inurl, checks) {
+    var write2file = function(result, response) {
+	if (result instanceof Error) {
+	    console.error('Error: ' + result.message);
+	    console.log("%s could not be reached. Exiting.", inurl);
+            process.exit(1); // http://nodejs.org/api/process.html#process_process_exit_code
+	} else {
+	    //console.error("Connected to %s", inurl);
+	    fs.writeFileSync(TEMPURLFILE, result);
+	    URLfile2console(TEMPURLFILE, checks);
+	}  
+    };
+    
+    return write2file;
+};
+
+
+var URLfile2console = function(tempfile, checks) {
+        assertFileExists(tempfile);
+        var checkJson = checkHtmlFile(tempfile, program.checks);
+        var outJson = JSON.stringify(checkJson, null, 4);
+        console.log(outJson);
+};
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -64,11 +92,22 @@ var clone = function(fn) {
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
-        .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists) ) //, HTMLFILE_DEFAULT)
+        .option('-u, --url <url_fqdn>', 'URL to index.html') //, clone(assertURLExists) ) //, URL_DEFAULT)
+	.parse(process.argv);
+    if (program.url && program.file) console.log("only a URL or a file may be specified");
+    else if (program.url) {
+	var write2file = assertURLExists(program.url, program.checks);
+	rest.get(program.url).on('complete', write2file);
+	//assertFileExists(TEMPURLFILE);
+	//var checkJson = checkHtmlFile(TEMPURLFILE, program.checks);
+	//var outJson = JSON.stringify(checkJson, null, 4);
+	//console.log(outJson);
+    } else {
+	var checkJson = checkHtmlFile(program.file, program.checks);
+	var outJson = JSON.stringify(checkJson, null, 4);
+	console.log(outJson);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
